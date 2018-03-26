@@ -81,6 +81,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AES.cs" />
     <Compile Include="Encryption.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Impersonator.cs" />

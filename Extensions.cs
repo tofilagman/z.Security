@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace z.Security
@@ -24,6 +25,6 @@ namespace z.Security
         /// <param name="useHash"></param>
         /// <returns></returns>
         public static string Decrypt64(this string val, string key, bool useHash = true) => Encryption.Decrypt64(val, key, useHash);
-
+        
     }
 }
