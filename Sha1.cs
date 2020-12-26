@@ -15,6 +15,8 @@ namespace z.Security
 
         public string hash(string msg, int salt)
         {
+#if NETSTANDARD
+
             var K = new uint[] { 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6 };
             msg = HttpUtility.UrlDecode(msg, System.Text.Encoding.UTF8);
             msg += Convert.ToChar(0x80) + "" + Convert.ToChar(salt);
@@ -68,8 +70,11 @@ namespace z.Security
             }
 
             return this.toHexStr(H0).ToLower() + this.toHexStr(H1).ToLower() + this.toHexStr(H2).ToLower() + this.toHexStr(H3).ToLower() + this.toHexStr(H4).ToLower();
+#else
+            throw new NotImplementedException("Available only in Net Standard");
+#endif
         }
-        
+
         private uint f(uint s, uint x, uint y, uint z)
         {
             uint j = default(uint);

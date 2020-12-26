@@ -1,12 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 using System.IO;
-using static Microsoft.VisualBasic.FileSystem;
-using static Microsoft.VisualBasic.Strings;
-using Microsoft.VisualBasic;
 
 namespace z.Security
 {
@@ -61,16 +56,10 @@ namespace z.Security
             }
         }
 
+        [Obsolete]
         public static string EncryptA(string mString, int key)
         {
-            string s = "";
-            foreach (char c in mString)
-            {
-                int j = Microsoft.VisualBasic.Strings.Asc(c);
-                char d = Microsoft.VisualBasic.Strings.Chr(j ^ key);
-                s += d;
-            }
-            return s;
+            throw new NotImplementedException("Obsolete: use z.Sql package instead");
         }
 
         public static string GetSHA1Digest(string Message)
@@ -126,18 +115,10 @@ namespace z.Security
             return Encoding.UTF8.GetString(plainTextBytes, 0, decryptedByteCount).TrimEnd("\0".ToCharArray());
         }
 
+        [Obsolete]
         public static bool EncryptedA(string FileName, int vKey, ref string vData)
         {
-            long fl = FileLen(FileName);
-            int n = default(int), fnum;
-            fl -= Len(n);
-            vData = new String(' ', Convert.ToInt32(fl));
-            fnum = FreeFile();
-            FileOpen(fnum, FileName, OpenMode.Binary, OpenAccess.Read);
-            FileGet(fnum, ref n);
-            FileGet(fnum, ref vData);
-            FileClose(fnum);
-            return CheckSumB(vData) == n;
+            throw new NotImplementedException("Obsolete");
         }
 
         public static int CheckSumB(string val)
@@ -153,24 +134,10 @@ namespace z.Security
             return Convert.ToInt32(k);
         }
 
+        [Obsolete]
         public static bool DecryptLogFile(string pFileName, string vData)
         {
-            int fnum = FreeFile();
-            try
-            {
-                int c = Asc('A');
-                vData = EncryptA(vData, c);
-                SetAttr(pFileName, GetAttr(pFileName) & FileAttribute.Normal);
-                FileOpen(fnum, pFileName, OpenMode.Output, OpenAccess.Write);
-                Print(fnum, vData);
-                FileClose(fnum);
-                SetAttr(pFileName, GetAttr(pFileName) | FileAttribute.ReadOnly);
-                return true;
-            }
-            finally
-            {
-                FileClose(fnum);
-            }
+            throw new NotImplementedException("Obsolete");
         }
 
         public static string Encrypt64(string toEncrypt, string key, bool useHashing = true)

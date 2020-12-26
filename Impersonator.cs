@@ -44,6 +44,8 @@ namespace z.Security
         private const int LOGON32_PROVIDER_DEFAULT = 0;
         #endregion
 
+#if NET45
+
         public static WindowsImpersonationContext impersonationContext;
         private static IntPtr token = new IntPtr(0);
 
@@ -123,6 +125,8 @@ namespace z.Security
             if (token != IntPtr.Zero)
                 CloseHandle(token);
         }
+
+#endif
     }
 
 
