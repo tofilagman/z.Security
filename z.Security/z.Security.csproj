@@ -2,17 +2,19 @@
 	<PropertyGroup>
     <TargetFrameworks>netstandard2.0;net45;</TargetFrameworks>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Authors>LJ Gomez</Authors>
-    <Company>Exia</Company>
-    <Version>3.0.0</Version>
+    <Authors>tofilagman</Authors>
+    <Company>tofilagman</Company>
+    <Version>3.0.1</Version>
     <Product>z.Security</Product>
     <Description></Description>
     <Copyright>Copyright ©  2013</Copyright>
-    <PackageIconUrl>https://www.gravatar.com/avatar/fc532ccf021d86fcafbb8db5a42d46d9</PackageIconUrl>
-    <PackageReleaseNotes></PackageReleaseNotes>
+    <PackageIconUrl></PackageIconUrl>
+    <PackageReleaseNotes>Implement Sodium</PackageReleaseNotes>
     <RootNamespace>z.Security</RootNamespace>
-    <AssemblyVersion>3.0.0.0</AssemblyVersion>
-    <FileVersion>3.0.0.0</FileVersion>
+    <AssemblyVersion>3.0.1.0</AssemblyVersion>
+    <FileVersion>3.0.1.0</FileVersion>
+    <PackageIcon>devteam.png</PackageIcon>
+    <RepositoryUrl>https://github.com/tofilagman/z.Security</RepositoryUrl>
   </PropertyGroup>
   
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard1.3' OR '$(TargetFramework)' == 'netstandard2.0'">
@@ -29,5 +31,12 @@
 
   <ItemGroup>
     <PackageReference Include="libsodium" Version="1.0.18.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="devteam.png">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
   </ItemGroup> 
 </Project>

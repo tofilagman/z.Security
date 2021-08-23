@@ -9,175 +9,125 @@ using System.Text.RegularExpressions;
 /// </summary>
 namespace z.Security
 {
-    [Obsolete]
-    public sealed class LZ
+    public class LZString
     {
+        static string keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+        static string keyStrUriSafe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
+        static Dictionary<string, Dictionary<char, int>> baseReverseDic = new Dictionary<string, Dictionary<char, int>>();
+        private delegate char GetCharFromInt(int a);
+        private static GetCharFromInt f = (a) => Convert.ToChar(a);
+        private delegate int GetNextValue(int index);
 
-        private const string keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-        private const string keyStrUriSafe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
-        private List<ReverseDicCtx> baseReverseDic = new List<ReverseDicCtx>();
-        private char f(int val)
+        private static int getBaseValue(string alphabet, char character)
         {
-            return Convert.ToChar(val);
-        }
-
-        private class ReverseDicCtx
-        {
-            public string key { get; set; }
-            public Dictionary<char, int> letter = new Dictionary<char, int>();
-        }
-
-        private int getBaseValue(string alphabet, char character)
-        {
-            if (!baseReverseDic.Where(x => x.key == alphabet).Any())
+            if (!baseReverseDic.ContainsKey(alphabet))
             {
-                var j = new ReverseDicCtx() { key = alphabet };
-                for (var i = 0; i < alphabet.Length; i++)
-                    j.letter.Add(alphabet[i], i);
-                baseReverseDic.Add(j);
+                baseReverseDic[alphabet] = new Dictionary<char, int>();
+                for (int i = 0; i < alphabet.Length; i++)
+                {
+                    baseReverseDic[alphabet][alphabet[i]] = i;
+                }
             }
-            return baseReverseDic.Where(x => x.key == alphabet).Single().letter[character];
+            return baseReverseDic[alphabet][character];
         }
 
-        #region Base64
-
-        public string compressToBase64(string input)
+        public static string compressToBase64(string input)
         {
             if (input == null) return "";
-            var res = this._compress(input, 6, x => keyStrBase64[x]);
-            switch (res.Length & 4)
+            string res = _compress(input, 6, (a) => keyStrBase64[a]);
+            switch (res.Length % 4)
             {
-                default: return res;
+                case 0: return res;
                 case 1: return res + "===";
                 case 2: return res + "==";
                 case 3: return res + "=";
             }
+            return null;
         }
 
-        public string decompressFromBase64(string input)
+        public static string decompressFromBase64(string input)
         {
             if (input == null) return "";
             if (input == "") return null;
-            return this._decompress(input.Length, 32, x => getBaseValue(keyStrBase64, input[x]));
+            return _decompress(input.Length, 32, (index) => getBaseValue(keyStrBase64, input[index]));
         }
 
-        #endregion
-
-        #region Base16
-
-        public string compressToUTF16(string input)
+        public static string compressToUTF16(string input)
         {
             if (input == null) return "";
-            return this._compress(input, 15, a => f(a + 32)) + " ";
+            return _compress(input, 15, (a) => f(a + 32)) + " ";
         }
 
-        public string decompressFromUTF16(string compressed)
+        public static string decompressFromUTF16(string compressed)
         {
             if (compressed == null) return "";
             if (compressed == "") return null;
-            return this._decompress(compressed.Length, 16384, index => compressed[index] - 32);
+            return _decompress(compressed.Length, 16384, index => Convert.ToInt32(compressed[index]) - 32);
         }
 
-        #endregion
-
-        #region Uint8Array
-
-        /// <summary>
-        /// compress into uint8array (UCS-2 big endian format)
-        /// </summary>
-        /// <returns></returns>
-        public uint[] compressToUint8Array(string uncompressed)
+        public static byte[] compressToUint8Array(string uncompressed)
         {
-            var compressed = this.compress(uncompressed);
-            var buf = new uint[compressed.Length * 2];
+            string compressed = compress(uncompressed);
+            byte[] buf = new byte[compressed.Length * 2];
 
-            for (var i = 0; i < compressed.Length; i++)
+            for (int i = 0, TotalLen = compressed.Length; i < TotalLen; i++)
             {
-                var current_value = compressed[i];
-                buf[i * 2] = Convert.ToUInt32(current_value >> 8);
-                buf[i * 2 + 1] = Convert.ToUInt32(current_value % 256);
+                int current_value = Convert.ToInt32(compressed[i]);
+                buf[i * 2] = (byte)(((uint)current_value) >> 8);
+                buf[i * 2 + 1] = (byte)(current_value % 256);
             }
             return buf;
         }
 
-        public string decompressFromUint8Array(uint[] compressed)
+        public static string decompressFromUint8Array(byte[] compressed)
         {
-            if (compressed == null) return this.decompress(compressed);
+            if (compressed == null) return "";
             else
             {
-                var buf = new int[compressed.Length / 2];
-                for (var i = 0; i < buf.Length; i++)
-                    buf[i] = Convert.ToInt32(compressed[i * 2] * 256 + compressed[i * 2 + 1]);
-
-                var result = new List<char>();
-                foreach (var j in buf)
-                    result.Add(f(j));
-
-                return this.decompress(string.Join("", result));
+                int[] buf = new int[compressed.Length / 2];
+                for (int i = 0, TotalLen = buf.Length; i < TotalLen; i++)
+                {
+                    buf[i] = ((int)compressed[i * 2]) * 256 + ((int)compressed[i * 2 + 1]);
+                }
+                char[] result = new char[buf.Length];
+                for (int i = 0; i < buf.Length; i++)
+                {
+                    result[i] = f(buf[i]);
+                }
+                return decompress(new string(result));
             }
         }
 
-        #endregion
-
-        #region URIComponent
-
-        public string compressToEncodedURIComponent(string input)
+        public static string compressToEncodedURIComponent(string input)
         {
             if (input == null) return "";
-            return this._compress(input, 6, a => keyStrUriSafe[a]);
+            return _compress(input, 6, (a) => keyStrUriSafe[a]);
         }
 
-        public string decompressFromEncodedURIComponent(string input)
+        public static string decompressFromEncodedURIComponent(string input)
         {
             if (input == null) return "";
             if (input == "") return null;
-            input = input.Replace(" ", "+");
-            return this._decompress(input.Length, 32, index => getBaseValue(keyStrUriSafe, input[index]));
+            input = input.Replace(' ', '+');
+            return _decompress(input.Length, 32, (index) => getBaseValue(keyStrUriSafe, input[index]));
         }
 
-        #endregion
-
-        #region Compress Implem
-
-        private string compress(string uncompressed)
+        public static string compress(string uncompressed)
         {
-            return this._compress(uncompressed, 16, a => f(a));
+            return _compress(uncompressed, 16, f);
         }
 
-        private string decompress(uint[] compressed)
-        {
-            throw new NotImplementedException();
-        }
-
-        private string decompress(string compressed)
-        {
-            if (compressed == null) return "";
-            if (compressed == "") return null;
-            return this._decompress(compressed.Length, 32768, index => compressed[index]);
-        }
-
-        #endregion
-
-        #region Compress Algo
-
-        private string _compress(string uncompressed, int bitsPerChar, Func<int, char> getCharFromInt)
+        private static string _compress(string uncompressed, int bitsPerChar, GetCharFromInt getCharFromInt)
         {
             if (uncompressed == null) return "";
-            int i, ii;
-            int value;
-            var context_dictionary = new Dictionary<string, int>();
-            var context_dictionaryToCreate = new Dictionary<string, bool>();
+            int i, value, ii, context_enlargeIn = 2, context_dictSize = 3, context_numBits = 2, context_data_val = 0, context_data_position = 0;
+            Dictionary<string, bool> context_dictionaryToCreate = new Dictionary<string, bool>();
+            Dictionary<string, int> context_dictionary = new Dictionary<string, int>();
+            StringBuilder context_data = new StringBuilder();
             string context_c = "";
-            string context_wc = "";
-            string context_w = "";
-            int context_enlargeIn = 2, // Compensate for the first entry which should not count
-             context_dictSize = 3,
-             context_numBits = 2;
-            var context_data = new List<char>();
-            int context_data_val = 0,
-            context_data_position = 0;
+            string context_wc = "", context_w = "";
 
-            for (ii = 0; ii < uncompressed.Length; ii += 1)
+            for (ii = 0; ii < uncompressed.Length; ii++)
             {
                 context_c = uncompressed[ii].ToString();
                 if (!context_dictionary.ContainsKey(context_c))
@@ -185,16 +135,16 @@ namespace z.Security
                     context_dictionary[context_c] = context_dictSize++;
                     context_dictionaryToCreate[context_c] = true;
                 }
-
                 context_wc = context_w + context_c;
                 if (context_dictionary.ContainsKey(context_wc))
                 {
                     context_w = context_wc;
                 }
-                else {
+                else
+                {
                     if (context_dictionaryToCreate.ContainsKey(context_w))
                     {
-                        if (context_w[0] < 256)
+                        if (Convert.ToInt32(context_w[0]) < 256)
                         {
                             for (i = 0; i < context_numBits; i++)
                             {
@@ -202,30 +152,33 @@ namespace z.Security
                                 if (context_data_position == bitsPerChar - 1)
                                 {
                                     context_data_position = 0;
-                                    context_data.Add(getCharFromInt(context_data_val));
+                                    context_data.Append(getCharFromInt(context_data_val));
                                     context_data_val = 0;
                                 }
-                                else {
+                                else
+                                {
                                     context_data_position++;
                                 }
                             }
-                            value = context_w[0];
+                            value = Convert.ToInt32(context_w[0]);
                             for (i = 0; i < 8; i++)
                             {
                                 context_data_val = (context_data_val << 1) | (value & 1);
                                 if (context_data_position == bitsPerChar - 1)
                                 {
                                     context_data_position = 0;
-                                    context_data.Add(getCharFromInt(context_data_val));
+                                    context_data.Append(getCharFromInt(context_data_val));
                                     context_data_val = 0;
                                 }
-                                else {
+                                else
+                                {
                                     context_data_position++;
                                 }
                                 value = value >> 1;
                             }
                         }
-                        else {
+                        else
+                        {
                             value = 1;
                             for (i = 0; i < context_numBits; i++)
                             {
@@ -233,25 +186,27 @@ namespace z.Security
                                 if (context_data_position == bitsPerChar - 1)
                                 {
                                     context_data_position = 0;
-                                    context_data.Add(getCharFromInt(context_data_val));
+                                    context_data.Append(getCharFromInt(context_data_val));
                                     context_data_val = 0;
                                 }
-                                else {
+                                else
+                                {
                                     context_data_position++;
                                 }
                                 value = 0;
                             }
-                            value = context_w[0];
+                            value = Convert.ToInt32(context_w[0]);
                             for (i = 0; i < 16; i++)
                             {
                                 context_data_val = (context_data_val << 1) | (value & 1);
                                 if (context_data_position == bitsPerChar - 1)
                                 {
                                     context_data_position = 0;
-                                    context_data.Add(getCharFromInt(context_data_val));
+                                    context_data.Append(getCharFromInt(context_data_val));
                                     context_data_val = 0;
                                 }
-                                else {
+                                else
+                                {
                                     context_data_position++;
                                 }
                                 value = value >> 1;
@@ -260,12 +215,13 @@ namespace z.Security
                         context_enlargeIn--;
                         if (context_enlargeIn == 0)
                         {
-                            context_enlargeIn = Convert.ToInt32(Math.Pow(2, context_numBits));
+                            context_enlargeIn = (int)Math.Pow(2, context_numBits);
                             context_numBits++;
                         }
                         context_dictionaryToCreate.Remove(context_w);
                     }
-                    else {
+                    else
+                    {
                         value = context_dictionary[context_w];
                         for (i = 0; i < context_numBits; i++)
                         {
@@ -273,10 +229,11 @@ namespace z.Security
                             if (context_data_position == bitsPerChar - 1)
                             {
                                 context_data_position = 0;
-                                context_data.Add(getCharFromInt(context_data_val));
+                                context_data.Append(getCharFromInt(context_data_val));
                                 context_data_val = 0;
                             }
-                            else {
+                            else
+                            {
                                 context_data_position++;
                             }
                             value = value >> 1;
@@ -285,21 +242,20 @@ namespace z.Security
                     context_enlargeIn--;
                     if (context_enlargeIn == 0)
                     {
-                        context_enlargeIn = Convert.ToInt32(Math.Pow(2, context_numBits));
+                        context_enlargeIn = (int)Math.Pow(2, context_numBits);
                         context_numBits++;
                     }
-                    // Add wc to the dictionary.
+                    //Add wc to the dictionary
                     context_dictionary[context_wc] = context_dictSize++;
                     context_w = context_c;
                 }
             }
-
-            // Output the code for w.
+            //Output the code for w
             if (context_w != "")
             {
                 if (context_dictionaryToCreate.ContainsKey(context_w))
                 {
-                    if (context_w[0] < 256)
+                    if (Convert.ToInt32(context_w[0]) < 256)
                     {
                         for (i = 0; i < context_numBits; i++)
                         {
@@ -307,30 +263,33 @@ namespace z.Security
                             if (context_data_position == bitsPerChar - 1)
                             {
                                 context_data_position = 0;
-                                context_data.Add(getCharFromInt(context_data_val));
+                                context_data.Append(getCharFromInt(context_data_val));
                                 context_data_val = 0;
                             }
-                            else {
+                            else
+                            {
                                 context_data_position++;
                             }
                         }
-                        value = context_w[0];
+                        value = Convert.ToInt32(context_w[0]);
                         for (i = 0; i < 8; i++)
                         {
                             context_data_val = (context_data_val << 1) | (value & 1);
                             if (context_data_position == bitsPerChar - 1)
                             {
                                 context_data_position = 0;
-                                context_data.Add(getCharFromInt(context_data_val));
+                                context_data.Append(getCharFromInt(context_data_val));
                                 context_data_val = 0;
                             }
-                            else {
+                            else
+                            {
                                 context_data_position++;
                             }
                             value = value >> 1;
                         }
                     }
-                    else {
+                    else
+                    {
                         value = 1;
                         for (i = 0; i < context_numBits; i++)
                         {
@@ -338,25 +297,27 @@ namespace z.Security
                             if (context_data_position == bitsPerChar - 1)
                             {
                                 context_data_position = 0;
-                                context_data.Add(getCharFromInt(context_data_val));
+                                context_data.Append(getCharFromInt(context_data_val));
                                 context_data_val = 0;
                             }
-                            else {
+                            else
+                            {
                                 context_data_position++;
                             }
                             value = 0;
                         }
-                        value = context_w[0];
+                        value = Convert.ToInt32(context_w[0]);
                         for (i = 0; i < 16; i++)
                         {
                             context_data_val = (context_data_val << 1) | (value & 1);
                             if (context_data_position == bitsPerChar - 1)
                             {
                                 context_data_position = 0;
-                                context_data.Add(getCharFromInt(context_data_val));
+                                context_data.Append(getCharFromInt(context_data_val));
                                 context_data_val = 0;
                             }
-                            else {
+                            else
+                            {
                                 context_data_position++;
                             }
                             value = value >> 1;
@@ -365,12 +326,13 @@ namespace z.Security
                     context_enlargeIn--;
                     if (context_enlargeIn == 0)
                     {
-                        context_enlargeIn = Convert.ToInt32(Math.Pow(2, context_numBits));
+                        context_enlargeIn = (int)Math.Pow(2, context_numBits);
                         context_numBits++;
                     }
                     context_dictionaryToCreate.Remove(context_w);
                 }
-                else {
+                else
+                {
                     value = context_dictionary[context_w];
                     for (i = 0; i < context_numBits; i++)
                     {
@@ -378,26 +340,24 @@ namespace z.Security
                         if (context_data_position == bitsPerChar - 1)
                         {
                             context_data_position = 0;
-                            context_data.Add(getCharFromInt(context_data_val));
+                            context_data.Append(getCharFromInt(context_data_val));
                             context_data_val = 0;
                         }
-                        else {
+                        else
+                        {
                             context_data_position++;
                         }
                         value = value >> 1;
                     }
-
-
                 }
                 context_enlargeIn--;
                 if (context_enlargeIn == 0)
                 {
-                    context_enlargeIn = Convert.ToInt32(Math.Pow(2, context_numBits));
+                    context_enlargeIn = (int)Math.Pow(2, context_numBits);
                     context_numBits++;
                 }
             }
-
-            // Mark the end of the stream
+            //Mark the end of the stream
             value = 2;
             for (i = 0; i < context_numBits; i++)
             {
@@ -405,58 +365,58 @@ namespace z.Security
                 if (context_data_position == bitsPerChar - 1)
                 {
                     context_data_position = 0;
-                    context_data.Add(getCharFromInt(context_data_val));
+                    context_data.Append(getCharFromInt(context_data_val));
                     context_data_val = 0;
                 }
-                else {
+                else
+                {
                     context_data_position++;
                 }
                 value = value >> 1;
             }
 
-            // Flush the last char
+            //Flush the last char
             while (true)
             {
                 context_data_val = (context_data_val << 1);
                 if (context_data_position == bitsPerChar - 1)
                 {
-                    context_data.Add(getCharFromInt(context_data_val));
+                    context_data.Append(getCharFromInt(context_data_val));
                     break;
                 }
                 else context_data_position++;
             }
-
-            return string.Join("", context_data);
+            return context_data.ToString();
         }
 
-        class dataCtx
+        public static string decompress(string compressed)
         {
-            public int val { get; set; }
-            public int position { get; set; }
-            public int index { get; set; }
+            if (compressed == null) return "";
+            if (compressed == "") return null;
+            return _decompress(compressed.Length, 32768, (index) => Convert.ToInt32(compressed[index]));
         }
 
-        private string _decompress(int length, int resetValue, Func<int, int> getNextValue)
-        {
-            var dictionary = new Dictionary<int, string>();
-            int next,
-             enlargeIn = 4,
-             dictSize = 4,
-             numBits = 3;
-            string entry = "";
-            var result = new List<string>();
-            int i;
-            string w;
-            int bits, resb, maxpower, power, c = 0;
-            var data = new dataCtx() { val = getNextValue(0), position = resetValue, index = 1 };
 
-            for (i = 0; i < 3; i += 1)
+        private struct dataStruct
+        {
+            public int val, position, index;
+        }
+        private static string _decompress(int length, int resetValue, GetNextValue getNextValue)
+        {
+            Dictionary<int, string> dictionary = new Dictionary<int, string>();
+            int next, enlargeIn = 4, dictSize = 4, numBits = 3, i, bits, resb, maxpower, power;
+            int c = 0;
+            string entry = "", w;
+            StringBuilder result = new StringBuilder();
+            var data = new dataStruct() { val = getNextValue(0), position = resetValue, index = 1 };
+
+            for (i = 0; i < 3; i++)
             {
                 dictionary[i] = Convert.ToChar(i).ToString();
             }
 
             bits = 0;
-            maxpower = Convert.ToInt32(Math.Pow(2, 2));
+            maxpower = (int)Math.Pow(2, 2);
             power = 1;
             while (power != maxpower)
             {
@@ -475,7 +435,7 @@ namespace z.Security
             {
                 case 0:
                     bits = 0;
-                    maxpower = Convert.ToInt32(Math.Pow(2, 8));
+                    maxpower = (int)Math.Pow(2, 8);
                     power = 1;
                     while (power != maxpower)
                     {
@@ -489,11 +449,11 @@ namespace z.Security
                         bits |= (resb > 0 ? 1 : 0) * power;
                         power <<= 1;
                     }
-                    c = f(bits);
+                    c = Convert.ToInt32(f(bits));
                     break;
                 case 1:
                     bits = 0;
-                    maxpower = Convert.ToInt32(Math.Pow(2, 16));
+                    maxpower = (int)Math.Pow(2, 16);
                     power = 1;
                     while (power != maxpower)
                     {
@@ -507,14 +467,14 @@ namespace z.Security
                         bits |= (resb > 0 ? 1 : 0) * power;
                         power <<= 1;
                     }
-                    c = f(bits);
+                    c = Convert.ToInt32(f(bits));
                     break;
                 case 2:
                     return "";
             }
             dictionary[3] = Convert.ToChar(c).ToString();
-            w = c.ToString();
-            result.Add(Convert.ToChar(c).ToString());
+            w = Convert.ToChar(c).ToString();
+            result.Append(Convert.ToChar(c));
             while (true)
             {
                 if (data.index > length)
@@ -523,7 +483,7 @@ namespace z.Security
                 }
 
                 bits = 0;
-                maxpower = Convert.ToInt32(Math.Pow(2, numBits));
+                maxpower = (int)Math.Pow(2, numBits);
                 power = 1;
                 while (power != maxpower)
                 {
@@ -542,7 +502,7 @@ namespace z.Security
                 {
                     case 0:
                         bits = 0;
-                        maxpower = Convert.ToInt32(Math.Pow(2, 8));
+                        maxpower = (int)Math.Pow(2, 8);
                         power = 1;
                         while (power != maxpower)
                         {
@@ -563,7 +523,7 @@ namespace z.Security
                         break;
                     case 1:
                         bits = 0;
-                        maxpower = Convert.ToInt32(Math.Pow(2, 16));
+                        maxpower = (int)Math.Pow(2, 16);
                         power = 1;
                         while (power != maxpower)
                         {
@@ -582,12 +542,12 @@ namespace z.Security
                         enlargeIn--;
                         break;
                     case 2:
-                        return string.Join("", result);
+                        return result.ToString();
                 }
 
                 if (enlargeIn == 0)
                 {
-                    enlargeIn = Convert.ToInt32(Math.Pow(2, numBits));
+                    enlargeIn = (int)Math.Pow(2, numBits);
                     numBits++;
                 }
 
@@ -595,33 +555,30 @@ namespace z.Security
                 {
                     entry = dictionary[c];
                 }
-                else {
+                else
+                {
                     if (c == dictSize)
                     {
-                        entry = w + w[0];
+                        entry = w + w[0].ToString();
                     }
-                    else {
+                    else
+                    {
                         return null;
                     }
                 }
-                result.Add(entry);
+                result.Append(entry);
 
-                // Add w+entry[0] to the dictionary.
-                dictionary[dictSize++] = w + entry[0];
+                //Add w+entry[0] to the dictionary.
+                dictionary[dictSize++] = w + entry[0].ToString();
                 enlargeIn--;
-
                 w = entry;
-
                 if (enlargeIn == 0)
                 {
-                    enlargeIn = Convert.ToInt32(Math.Pow(2, numBits));
+                    enlargeIn = (int)Math.Pow(2, numBits);
                     numBits++;
                 }
-
             }
         }
-
-        #endregion
-
     }
+
 }

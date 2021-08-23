@@ -348,19 +348,20 @@ namespace z.Security
 
         public static string SendMessage(string data, byte[] secretKey, byte[] publicKey)
         {
-            var textBts = Encoding.Default.GetBytes(data);
+            var textBts = Encoding.UTF8.GetBytes(data);
             var nonce = GenerateNonce();
 
             var message = Create(textBts, nonce, secretKey, publicKey);
             var messageToBase64 = Convert.ToBase64String(message);
             var nonceBase64 = Convert.ToBase64String(nonce);
 
-            return $"{messageToBase64}.{nonceBase64}";
+            return LZString.compressToBase64($"{messageToBase64}.{nonceBase64}");
         }
 
         public static string ReadMessage(string data, byte[] secretKey, byte[] publicKey)
         {
-            var empt = data.Split('.');
+            var decrp = LZString.decompressFromBase64(data);
+            var empt = decrp.Split('.');
 
             if (empt.Length != 2)
                 throw new Exception("Data is not valid");
@@ -370,7 +371,77 @@ namespace z.Security
 
             var decryptedMessage = Open(message, nonce, secretKey, publicKey);
 
-            return Encoding.Default.GetString(decryptedMessage);
+            return Encoding.UTF8.GetString(decryptedMessage);
+        }
+
+        #endregion
+
+        #region AES
+
+        public static string EncryptString(string key, string plainText)
+        {
+            byte[] iv = new byte[16];
+            byte[] array;
+
+            using (Aes aes = Aes.Create())
+            {
+                aes.Key = Encoding.UTF8.GetBytes(key);
+                aes.IV = iv;
+
+                ICryptoTransform encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
+
+                using (MemoryStream memoryStream = new MemoryStream())
+                {
+                    using (CryptoStream cryptoStream = new CryptoStream((Stream)memoryStream, encryptor, CryptoStreamMode.Write))
+                    {
+                        using (StreamWriter streamWriter = new StreamWriter((Stream)cryptoStream))
+                        {
+                            streamWriter.Write(plainText);
+                        }
+
+                        array = memoryStream.ToArray();
+                    }
+                }
+            }
+
+            return Convert.ToBase64String(array);
+        }
+
+        public static string DecryptString(string key, string cipherText)
+        {
+            byte[] iv = new byte[16];
+            byte[] buffer = Convert.FromBase64String(cipherText);
+
+            using (Aes aes = Aes.Create())
+            {
+                aes.Key = Encoding.UTF8.GetBytes(key);
+                aes.IV = iv;
+                ICryptoTransform decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
+
+                using (MemoryStream memoryStream = new MemoryStream(buffer))
+                {
+                    using (CryptoStream cryptoStream = new CryptoStream((Stream)memoryStream, decryptor, CryptoStreamMode.Read))
+                    {
+                        using (StreamReader streamReader = new StreamReader((Stream)cryptoStream))
+                        {
+                            return streamReader.ReadToEnd();
+                        }
+                    }
+                }
+            }
+        }
+
+        public static string GetStringSha256Hash(string text)
+        {
+            if (String.IsNullOrEmpty(text))
+                return String.Empty;
+
+            using (var sha = new System.Security.Cryptography.SHA256Managed())
+            {
+                byte[] textData = System.Text.Encoding.UTF8.GetBytes(text);
+                byte[] hash = sha.ComputeHash(textData);
+                return BitConverter.ToString(hash).Replace("-", String.Empty);
+            }
         }
 
         #endregion
