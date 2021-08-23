@@ -10,7 +10,7 @@
     <Copyright>Copyright ©  2013</Copyright>
     <PackageIconUrl>https://www.gravatar.com/avatar/fc532ccf021d86fcafbb8db5a42d46d9</PackageIconUrl>
     <PackageReleaseNotes></PackageReleaseNotes>
-    <RootNamespace>z.z.Security</RootNamespace>
+    <RootNamespace>z.Security</RootNamespace>
     <AssemblyVersion>3.0.0.0</AssemblyVersion>
     <FileVersion>3.0.0.0</FileVersion>
   </PropertyGroup>
@@ -25,5 +25,9 @@
 
   <ItemGroup>
     <Folder Include="Properties\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="libsodium" Version="1.0.18.1" />
   </ItemGroup> 
 </Project>

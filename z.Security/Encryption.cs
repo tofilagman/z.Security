@@ -2,6 +2,9 @@
 using System.Text;
 using System.Security.Cryptography;
 using System.IO;
+using z.Security.Nacl;
+using z.Security.Nacl.Interop;
+using System.Runtime.InteropServices;
 
 namespace z.Security
 {
@@ -220,5 +223,156 @@ namespace z.Security
             //return the Clear decrypted TEXT
             return UTF8Encoding.UTF8.GetString(resultArray);
         }
+
+        #region Soduim
+
+        public static RevampedKeyPair GenerateKeyPair()
+        {
+            byte[] PublicKey = new Byte[GetPublicKeyBytesLength()];
+            byte[] SecretKey = new Byte[GetSecretKeyBytesLength()];
+
+            SodiumPublicKeyBoxLibrary.crypto_box_keypair(PublicKey, SecretKey);
+
+            RevampedKeyPair MyKeyPair = new RevampedKeyPair(PublicKey, SecretKey);
+
+            return MyKeyPair;
+        }
+
+        public static int GetPublicKeyBytesLength()
+        {
+            return SodiumPublicKeyBoxLibrary.crypto_box_publickeybytes();
+        }
+
+        public static int GetSecretKeyBytesLength()
+        {
+            return SodiumPublicKeyBoxLibrary.crypto_box_secretkeybytes();
+        }
+
+        public static int GetNonceBytesLength()
+        {
+            return SodiumPublicKeyBoxLibrary.crypto_box_noncebytes();
+        }
+
+        public static byte[] GenerateNonce()
+        {
+            return SodiumRNG.GetRandomBytes(GetNonceBytesLength());
+        }
+
+        public static int GetMACBytesLength()
+        {
+            return SodiumPublicKeyBoxLibrary.crypto_box_macbytes();
+        }
+
+        public static byte[] Create(byte[] Message, byte[] Nonce, byte[] SecretKey, byte[] PublicKey)
+        {
+            if (SecretKey == null || SecretKey.Length != GetSecretKeyBytesLength())
+                throw new ArgumentException("Error: Secret key must be " + GetSecretKeyBytesLength() + " bytes in length");
+
+            if (PublicKey == null || PublicKey.Length != GetPublicKeyBytesLength())
+                throw new ArgumentException("Error: Public key must be " + GetPublicKeyBytesLength() + " bytes in length");
+
+            if (Nonce == null || Nonce.Length != GetNonceBytesLength())
+                throw new ArgumentException("Error: Nonce must be " + GetNonceBytesLength() + " bytes in length");
+
+            byte[] CipherText = new byte[Message.Length + GetMACBytesLength()];
+            int ret = SodiumPublicKeyBoxLibrary.crypto_box_easy(CipherText, Message, Message.Length, Nonce, PublicKey, SecretKey);
+
+            GCHandle MyGeneralGCHandle = new GCHandle();
+            MyGeneralGCHandle = GCHandle.Alloc(SecretKey, GCHandleType.Pinned);
+            SodiumSecureMemory.MemZero(MyGeneralGCHandle.AddrOfPinnedObject(), SecretKey.Length);
+            MyGeneralGCHandle.Free();
+
+            MyGeneralGCHandle = GCHandle.Alloc(PublicKey, GCHandleType.Pinned);
+            SodiumSecureMemory.MemZero(MyGeneralGCHandle.AddrOfPinnedObject(), PublicKey.Length);
+            MyGeneralGCHandle.Free();
+
+            if (ret != 0)
+                throw new CryptographicException("Failed to create PublicKeyBox");
+
+            return CipherText;
+        }
+
+        public static byte[] Open(byte[] CipherText, byte[] Nonce, byte[] SecretKey, byte[] PublicKey)
+        {
+            if (SecretKey == null || SecretKey.Length != GetSecretKeyBytesLength())
+                throw new ArgumentException("Error: Secret key must be " + GetSecretKeyBytesLength() + " bytes in length");
+
+            if (PublicKey == null || PublicKey.Length != GetPublicKeyBytesLength())
+                throw new ArgumentException("Error: Public key must be " + GetPublicKeyBytesLength() + " bytes in length");
+
+            if (Nonce == null || Nonce.Length != GetNonceBytesLength())
+                throw new ArgumentException("Error: Nonce must be " + GetNonceBytesLength() + " bytes in length");
+
+            //check to see if there are MAC_BYTES of leading nulls, if so, trim.
+            //this is required due to an error in older versions.
+            if (CipherText[0] == 0)
+            {
+                //check to see if trim is needed
+                var trim = true;
+                for (var i = 0; i < GetMACBytesLength() - 1; i++)
+                {
+                    if (CipherText[i] != 0)
+                    {
+                        trim = false;
+                        break;
+                    }
+                }
+
+                //if the leading MAC_BYTES are null, trim it off before going on.
+                if (trim)
+                {
+                    var temp = new Byte[CipherText.Length - GetMACBytesLength()];
+                    Array.Copy(CipherText, GetMACBytesLength(), temp, 0, CipherText.Length - GetMACBytesLength());
+
+                    CipherText = temp;
+                }
+            }
+
+            Byte[] Message = new Byte[CipherText.Length - GetMACBytesLength()];
+            int ret = SodiumPublicKeyBoxLibrary.crypto_box_open_easy(Message, CipherText, CipherText.Length, Nonce, PublicKey, SecretKey);
+
+            if (ret != 0)
+                throw new CryptographicException("Failed to open PublicKeyBox");
+
+            GCHandle MyGeneralGCHandle = new GCHandle();
+            MyGeneralGCHandle = GCHandle.Alloc(SecretKey, GCHandleType.Pinned);
+            SodiumSecureMemory.MemZero(MyGeneralGCHandle.AddrOfPinnedObject(), SecretKey.Length);
+            MyGeneralGCHandle.Free();
+
+            MyGeneralGCHandle = GCHandle.Alloc(PublicKey, GCHandleType.Pinned);
+            SodiumSecureMemory.MemZero(MyGeneralGCHandle.AddrOfPinnedObject(), PublicKey.Length);
+            MyGeneralGCHandle.Free();
+
+            return Message;
+        }
+
+        public static string SendMessage(string data, byte[] secretKey, byte[] publicKey)
+        {
+            var textBts = Encoding.Default.GetBytes(data);
+            var nonce = GenerateNonce();
+
+            var message = Create(textBts, nonce, secretKey, publicKey);
+            var messageToBase64 = Convert.ToBase64String(message);
+            var nonceBase64 = Convert.ToBase64String(nonce);
+
+            return $"{messageToBase64}.{nonceBase64}";
+        }
+
+        public static string ReadMessage(string data, byte[] secretKey, byte[] publicKey)
+        {
+            var empt = data.Split('.');
+
+            if (empt.Length != 2)
+                throw new Exception("Data is not valid");
+
+            var message = Convert.FromBase64String(empt[0]);
+            var nonce = Convert.FromBase64String(empt[1]);
+
+            var decryptedMessage = Open(message, nonce, secretKey, publicKey);
+
+            return Encoding.Default.GetString(decryptedMessage);
+        }
+
+        #endregion
     }
 }
